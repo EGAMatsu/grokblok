@@ -13,12 +13,9 @@ import sys
 import os
 from PIL import Image
 
-def build_merged_palette(img1, img2, colors1=16, colors2=239):
-    q1 = img1.convert("P", palette=Image.Palette.ADAPTIVE, colors=colors1, dither=Image.FLOYDSTEINBERG)
-    q2 = img2.convert("P", palette=Image.Palette.ADAPTIVE, colors=colors2, dither=Image.FLOYDSTEINBERG)
-
-    p1 = q1.getpalette()[:colors1 * 3]
-    p2 = q2.getpalette()[:colors2 * 3]
+def build_merged_palette(p1, p2, colors1=16, colors2=239):
+    p1 = p1[:colors1 * 3]
+    p2 = p2[:colors2 * 3]
 
     merged = []
 
@@ -63,19 +60,22 @@ def main():
     frame1_rgb = Image.open(initial_path).convert("RGB").resize((w, h), Image.LANCZOS)
 
     # make the shared pal.
-    merged_palette = build_merged_palette(frame1_rgb, frame2_rgb)
+    q1 = frame1_rgb.convert("P", palette=Image.Palette.ADAPTIVE, colors=16, dither=Image.FLOYDSTEINBERG)
+    q2 = frame2_rgb.convert("P", palette=Image.Palette.ADAPTIVE, colors=239, dither=Image.FLOYDSTEINBERG)
 
-    palette_img = Image.new("P", (1, 1))
-    palette_img.putpalette(merged_palette)
+    p1 = q1.getpalette()
+    p2 = q2.getpalette()
 
-    def quantize(src):
-        return src.quantize(palette=palette_img, dither=Image.FLOYDSTEINBERG)
+    merged_palette = build_merged_palette(p1, p2)
 
-    # the gag image
-    frame1_p = quantize(frame1_rgb)
+    frame1_p = q1.copy()
+    frame1_p.putpalette(merged_palette)
 
-    # the image
-    frame2_p = quantize(frame2_rgb)
+    lut = list(range(256))
+    for i in range(239):
+        lut[i] = i + 16
+    frame2_p = q2.point(lut)
+    frame2_p.putpalette(merged_palette)
 
     # generate blank frame
     blank = Image.new("P", (w, h), 255)  # 255 = transparent index
@@ -91,7 +91,7 @@ def main():
         frames.append(blank.copy())
 
     # repeat the image again
-    final_frame = quantize(frame2_rgb)
+    final_frame = frame2_p.copy()
     frames.append(final_frame)
 
     # output
@@ -112,7 +112,6 @@ def main():
     )
 
     print(f"Output the \"blok'd\" image to: {out_gif}, enjoy.")
-
 
 if __name__ == "__main__":
     main()
